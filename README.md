@@ -7,9 +7,10 @@ The design write-up (data model, the simplest-correct mechanism, rejected altern
 idempotency placement, consistency-vs-availability, AI disclosure, cost) is in
 [DESIGN.md](./DESIGN.md).
 
-- **Live URL:** _add after deploy_
-- **Public logs:** _add after deploy_
-- **Metrics:** `‹live-url›/metrics`
+ **Live URL:** https://paytm-wallet-uy4u.onrender.com
+- **Health:** https://paytm-wallet-uy4u.onrender.com/healthz
+- **Metrics:** https://paytm-wallet-uy4u.onrender.com/metrics
+- **Public logs:** Render dashboard → the `paytm-wallet` service → Logs (structured JSON, one line per request with `correlation_id`)
 
 ---
 
