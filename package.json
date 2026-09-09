@@ -1,0 +1,28 @@
+{
+  "name": "paytm-wallet",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Wallet service with peer-to-peer transfers. Integer paise, exactly-once transfers, conservation under contention.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "burst": "node scripts/burst.mjs"
+  },
+  "dependencies": {
+    "fastify": "5.2.1",
+    "pg": "8.13.1",
+    "pino": "9.6.0",
+    "prom-client": "15.1.3",
+    "zod": "3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.5",
+    "@types/pg": "8.11.10",
+    "typescript": "5.7.3"
+  }
+}

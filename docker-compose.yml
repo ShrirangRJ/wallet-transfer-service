@@ -1,0 +1,62 @@
+# One command from a fresh clone:
+#
+#   docker compose up --build
+#
+# The app waits for Postgres to report healthy, applies its own migrations, then listens on
+# http://localhost:8080. No manual migration or seeding step.
+
+services:
+  postgres:
+    image: postgres:16.6-alpine
+    environment:
+      POSTGRES_USER: wallet
+      POSTGRES_PASSWORD: wallet
+      POSTGRES_DB: wallet
+    # Raised because the burst script drives hundreds of concurrent transfers, and the
+    # default of 100 is shared with autovacuum workers and superuser slots.
+    command: ["postgres", "-c", "max_connections=200"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wallet -d wallet"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Host 5433 -> container 5432, so this never collides with a Postgres already bound to
+      # host 5432. The app does NOT use this mapping; it reaches Postgres over the compose
+      # network at postgres:5432. This binding exists only so you can point psql / a GUI at
+      # localhost:5433 to inspect the data. Override with HOST_PG_PORT if 5433 is taken too.
+      - "${HOST_PG_PORT:-5433}:5432"
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+    init: true
+    environment:
+      PORT: "8080"
+      HOST: 0.0.0.0
+      LOG_LEVEL: info
+      DATABASE_URL: postgres://wallet:wallet@postgres:5432/wallet
+      DATABASE_SSL: "false"
+      PG_POOL_MAX: "20"
+      TX_MAX_RETRIES: "5"
+      # Local development default. Override with `ADMIN_TOKEN=... docker compose up`, and
+      # never reuse this value on the deployed instance.
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-dev-admin-token-change-me}
+    depends_on:
+      postgres:
+        # Not just "started": the app runs migrations at boot, so Postgres has to be
+        # accepting connections first.
+        condition: service_healthy
+    ports:
+      # Host 8090 -> container 8080 by default, so this never collides with something already
+      # bound to host 8080. The API is reachable at http://localhost:8090. Override with
+      # HOST_APP_PORT if 8090 is taken too. The container always listens on 8080 internally.
+      - "${HOST_APP_PORT:-8090}:8080"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

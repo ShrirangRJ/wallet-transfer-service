@@ -1,0 +1,41 @@
+# Render Blueprint. Deploys the wallet API as a Docker web service backed by a free
+# managed Postgres, on the free tier, for INR 0. Deploy by pushing this repo to GitHub and
+# choosing "New +" -> "Blueprint" in the Render dashboard, or point Render at the repo.
+#
+# The app runs its own migrations at boot, so there is no separate migration step.
+
+databases:
+  - name: paytm-wallet-db
+    plan: free
+    databaseName: wallet
+    user: wallet
+
+services:
+  - type: web
+    name: paytm-wallet
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: paytm-wallet-db
+          property: connectionString
+      # Render's managed Postgres terminates TLS with a chain that is not in the Node trust
+      # store, so TLS is enabled with rejectUnauthorized=false (see src/config.ts).
+      - key: DATABASE_SSL
+        value: "true"
+      - key: PORT
+        value: "8080"
+      - key: LOG_LEVEL
+        value: "info"
+      - key: PG_POOL_MAX
+        # Render free Postgres caps connections low; keep the pool well under the limit.
+        value: "8"
+      - key: TX_MAX_RETRIES
+        value: "5"
+      # Generated once by Render and kept secret. This is the token for POST /wallets/{id}/fund.
+      # Read it from the service's Environment tab to run the burst script against the live URL.
+      - key: ADMIN_TOKEN
+        generateValue: true
