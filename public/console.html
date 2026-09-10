@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wallet Console</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --line: #262b36; --text: #e6e8ec;
+    --muted: #9aa4b2; --accent: #4c8bf5; --ok: #2fbf71; --warn: #e0a83e; --err: #e5484d;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  header {
+    padding: 16px 20px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .note { color: var(--muted); font-size: 12px; }
+  .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 20px; max-width: 1200px; }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 12px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 3px; }
+  input, select {
+    width: 100%; background: #0d0f14; border: 1px solid var(--line); color: var(--text);
+    border-radius: 7px; padding: 8px 10px; font: 13px var(--mono);
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 8px; } .row > * { flex: 1; }
+  button {
+    margin-top: 10px; background: var(--accent); color: #fff; border: 0; border-radius: 7px;
+    padding: 9px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  button.sec { background: #2a2f3a; }
+  button:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .accounts { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .acct { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+  .acct b { color: var(--text); } .acct .k { color: var(--muted); }
+  .acct .bal { float: right; font: 13px var(--mono); color: var(--ok); }
+  .full { grid-column: 1 / -1; }
+  #log { background: #0b0d11; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+         font: 12px/1.55 var(--mono); white-space: pre-wrap; word-break: break-word; max-height: 420px; overflow: auto; }
+  .le { padding: 6px 0; border-bottom: 1px dashed #20242e; }
+  .le .m { font-weight: 700; }
+  .s2 { color: var(--ok); } .s4 { color: var(--warn); } .s5 { color: var(--err); } .s0 { color: var(--err); }
+  .pill { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; }
+  code { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Wallet Console</h1>
+  <span class="note">A minimal client for the wallet API. Money is integer <b>paise</b>. UI is not part of the graded scope — this is a convenience for driving the endpoints.</span>
+</header>
+
+<div class="wrap">
+  <div class="panel full">
+    <label>API base URL</label>
+    <input id="base" />
+    <div class="hint">Defaults to this page's origin, so it targets the same deployment that served the console.</div>
+  </div>
+
+  <!-- Users & wallets -->
+  <div class="panel">
+    <h2>1 · Users &amp; wallets</h2>
+    <label>New user id (optional)</label>
+    <input id="userId" placeholder="e.g. alice — leave blank for a random id" />
+    <button id="btnUser">Create user + wallet</button>
+    <div class="hint">Creates the user, then get-or-creates its wallet. The bearer token is kept in this page only.</div>
+    <div class="accounts" id="accounts"></div>
+  </div>
+
+  <!-- Fund -->
+  <div class="panel">
+    <h2>2 · Fund a wallet (admin)</h2>
+    <label>Admin token</label>
+    <input id="adminToken" placeholder="ADMIN_TOKEN from the service env" />
+    <label>Wallet</label>
+    <select id="fundWallet"></select>
+    <div class="row">
+      <div><label>Amount (paise)</label><input id="fundAmount" value="100000" /></div>
+      <div><label>Idempotency key</label><input id="fundKey" /></div>
+    </div>
+    <button id="btnFund">Fund from mint</button>
+    <div class="hint">Funding is a real transfer out of the pre-seeded mint wallet, not a faucet — total balance stays constant.</div>
+  </div>
+
+  <!-- Transfer -->
+  <div class="panel">
+    <h2>3 · Transfer</h2>
+    <div class="row">
+      <div><label>From</label><select id="from"></select></div>
+      <div><label>To</label><select id="to"></select></div>
+    </div>
+    <div class="row">
+      <div><label>Amount (paise)</label><input id="amount" value="25000" /></div>
+      <div><label>Idempotency key</label><input id="key" /></div>
+    </div>
+    <div class="row">
+      <button id="btnTransfer">Send</button>
+      <button id="btnTransferAgain" class="sec" title="Re-send with the SAME key and body">Send again (same key)</button>
+    </div>
+    <div class="hint">Send twice with the same key → the second is an idempotent replay (200, identical body). Change the amount but keep the key → 409.</div>
+  </div>
+
+  <!-- Lookups -->
+  <div class="panel">
+    <h2>4 · Look up</h2>
+    <label>Wallet id</label>
+    <div class="row"><input id="lookWallet" placeholder="wallet uuid" /><button id="btnBalance" class="sec" style="flex:0 0 auto">Balance</button></div>
+    <label>Transfer id</label>
+    <div class="row"><input id="lookTransfer" placeholder="transfer uuid" /><button id="btnStatus" class="sec" style="flex:0 0 auto">Status</button></div>
+    <label>Health &amp; metrics</label>
+    <div class="row">
+      <button id="btnHealth" class="sec">/healthz</button>
+      <button id="btnReady" class="sec">/readyz</button>
+      <button id="btnMetrics" class="sec">/metrics</button>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="panel full">
+    <h2>Response log <span class="pill" id="corr"></span></h2>
+    <div id="log"></div>
+    <button id="btnClear" class="sec">Clear log</button>
+  </div>
+</div>
+
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  $('base').value = window.location.origin;
+
+  // In-page state. Tokens live here and nowhere else.
+  var accounts = [];              // { userId, token, walletId }
+  var lastTransfer = null;        // remember the last transfer body for "send again"
+
+  function randKey(prefix) { return prefix + '-' + Math.random().toString(36).slice(2, 10); }
+  $('fundKey').value = randKey('ui-fund');
+  $('key').value = randKey('ui-pay');
+
+  function base() { return $('base').value.replace(/\/+$/, ''); }
+
+  function logEntry(method, path, status, body, corrId) {
+    var cls = status === 0 ? 's0' : ('s' + String(status)[0]);
+    var div = document.createElement('div');
+    div.className = 'le';
+    var pretty = typeof body === 'string' ? body : JSON.stringify(body, null, 2);
+    div.innerHTML = '<span class="m">' + method + '</span> ' + path +
+      ' <span class="' + cls + '">→ ' + status + '</span>' +
+      (corrId ? ' <span class="pill">cid ' + corrId + '</span>' : '') +
+      '\n' + escapeHtml(pretty);
+    $('log').prepend(div);
+  }
+  function escapeHtml(s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+
+  async function api(method, path, opts) {
+    opts = opts || {};
+    var headers = { accept: 'application/json' };
+    if (opts.token) headers['authorization'] = 'Bearer ' + opts.token;
+    if (opts.body !== undefined) headers['content-type'] = 'application/json';
+    var corr = randKey('ui');
+    headers['x-correlation-id'] = corr;
+    try {
+      var res = await fetch(base() + path, {
+        method: method, headers: headers,
+        body: opts.body === undefined ? undefined : JSON.stringify(opts.body)
+      });
+      var text = await res.text();
+      var parsed; try { parsed = JSON.parse(text); } catch (e) { parsed = text; }
+      var replay = res.headers.get('x-idempotent-replay');
+      logEntry(method, path + (replay ? '  [replay=' + replay + ']' : ''), res.status, parsed, res.headers.get('x-correlation-id') || corr);
+      return { status: res.status, body: parsed };
+    } catch (err) {
+      logEntry(method, path, 0, String(err), corr);
+      return { status: 0, body: null };
+    }
+  }
+
+  function renderAccounts() {
+    var box = $('accounts'); box.innerHTML = '';
+    ['fundWallet', 'from', 'to'].forEach(function (id) { $(id).innerHTML = ''; });
+    accounts.forEach(function (a, i) {
+      var card = document.createElement('div');
+      card.className = 'acct';
+      card.innerHTML = '<span class="bal" id="bal-' + i + '">—</span>' +
+        '<b>' + a.userId + '</b><br><span class="k">wallet</span> ' + (a.walletId || '(none)');
+      box.appendChild(card);
+      ['fundWallet', 'from', 'to'].forEach(function (sel) {
+        if (!a.walletId) return;
+        var o = document.createElement('option');
+        o.value = a.walletId; o.textContent = a.userId + ' · ' + a.walletId.slice(0, 8);
+        $(sel).appendChild(o);
+      });
+    });
+  }
+
+  function ownerToken(walletId) {
+    var a = accounts.find(function (x) { return x.walletId === walletId; });
+    return a ? a.token : null;
+  }
+
+  async function refreshBalance(i) {
+    var a = accounts[i]; if (!a.walletId) return;
+    var r = await api('GET', '/wallets/' + a.walletId, { token: a.token });
+    if (r.status === 200) { var el = $('bal-' + i); if (el) el.textContent = r.body.balance_paise + ' p'; }
+  }
+
+  $('btnUser').onclick = async function () {
+    var uid = $('userId').value.trim();
+    var r = await api('POST', '/users', { body: uid ? { user_id: uid } : {} });
+    if (r.status !== 201) return;
+    var acct = { userId: r.body.user_id, token: r.body.token, walletId: null };
+    var w = await api('POST', '/wallets', { token: acct.token });
+    if (w.status === 200 || w.status === 201) acct.walletId = w.body.wallet_id;
+    accounts.push(acct);
+    $('userId').value = '';
+    renderAccounts();
+    accounts.forEach(function (_, i) { refreshBalance(i); });
+  };
+
+  $('btnFund').onclick = async function () {
+    var wallet = $('fundWallet').value;
+    if (!wallet) return alert('Create a user/wallet first.');
+    await api('POST', '/wallets/' + wallet + '/fund', {
+      token: $('adminToken').value.trim(),
+      body: { amount_paise: numeric($('fundAmount').value), idempotency_key: $('fundKey').value.trim() }
+    });
+    $('fundKey').value = randKey('ui-fund');
+    accounts.forEach(function (_, i) { refreshBalance(i); });
+  };
+
+  async function doTransfer(reuse) {
+    var body;
+    if (reuse && lastTransfer) { body = lastTransfer; }
+    else {
+      var from = $('from').value, to = $('to').value;
+      if (!from || !to) return alert('Need two wallets.');
+      body = { from: from, to: to, amount_paise: numeric($('amount').value), idempotency_key: $('key').value.trim() };
+      lastTransfer = body;
+    }
+    var token = ownerToken(body.from);
+    await api('POST', '/transfers', { token: token, body: body });
+    accounts.forEach(function (_, i) { refreshBalance(i); });
+    if (!reuse) $('key').value = randKey('ui-pay');
+  }
+  $('btnTransfer').onclick = function () { doTransfer(false); };
+  $('btnTransferAgain').onclick = function () { doTransfer(true); };
+
+  $('btnBalance').onclick = function () {
+    var id = $('lookWallet').value.trim(); if (!id) return;
+    api('GET', '/wallets/' + id, { token: ownerToken(id) || $('adminToken').value.trim() });
+  };
+  $('btnStatus').onclick = function () {
+    var id = $('lookTransfer').value.trim(); if (!id) return;
+    api('GET', '/transfers/' + id, { token: $('adminToken').value.trim() || (accounts[0] && accounts[0].token) });
+  };
+  $('btnHealth').onclick = function () { api('GET', '/healthz'); };
+  $('btnReady').onclick = function () { api('GET', '/readyz'); };
+  $('btnMetrics').onclick = async function () {
+    var res = await fetch(base() + '/metrics'); var t = await res.text();
+    var lines = t.split('\n').filter(function (l) { return l.indexOf('transfers_') === 0 || l.indexOf('wallets_') === 0 || l.indexOf('ledger_') === 0; });
+    logEntry('GET', '/metrics (domain counters)', res.status, lines.join('\n') || t.slice(0, 500));
+  };
+  $('btnClear').onclick = function () { $('log').innerHTML = ''; };
+
+  function numeric(v) { return /^\d+$/.test(String(v).trim()) ? parseInt(v, 10) : v; }
+</script>
+</body>
+</html>
