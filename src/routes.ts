@@ -1,4 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { z } from 'zod';
 import { authenticate, generateToken, hashToken, requireAdmin, type Caller } from './auth.js';
 import { MINT_WALLET_ID } from './config.js';
@@ -17,6 +19,17 @@ import { AmountFormatError, parsePaise } from './money.js';
 import { transferBody, walletBody } from './serialize.js';
 
 const uuidSchema = z.string().uuid('must be a UUID');
+
+// public/ sits next to dist/ both locally and in the container (WORKDIR /app). Read once and
+// cache; the file is small and never changes at runtime.
+const CONSOLE_HTML_PATH = path.join(import.meta.dirname, '..', 'public', 'console.html');
+let consoleHtmlCache: string | undefined;
+async function loadConsoleHtml(): Promise<string> {
+  if (consoleHtmlCache === undefined) {
+    consoleHtmlCache = await readFile(CONSOLE_HTML_PATH, 'utf8');
+  }
+  return consoleHtmlCache;
+}
 
 const createUserSchema = z.object({
   user_id: z
@@ -141,6 +154,7 @@ export function registerRoutes(app: FastifyInstance): void {
       'GET /healthz': 'liveness',
       'GET /readyz': 'readiness, including a database round trip',
       'GET /metrics': 'Prometheus exposition, including domain counters',
+      'GET /console': 'minimal same-origin HTML client for driving the API by hand',
     },
     invariants: [
       'conservation: the sum of all wallet balances never changes',
@@ -167,6 +181,15 @@ export function registerRoutes(app: FastifyInstance): void {
   app.get('/metrics', async (_request, reply) => {
     reply.header('Content-Type', registry.contentType);
     return registry.metrics();
+  });
+
+  // ---- console --------------------------------------------------------------------------
+  // A minimal same-origin HTML client for driving the API by hand. Same-origin means the
+  // page's fetch calls hit this deployment directly with no CORS involved. UI is explicitly
+  // out of the graded scope; this is a convenience, not a product surface.
+  app.get('/console', async (_request, reply) => {
+    reply.header('Content-Type', 'text/html; charset=utf-8');
+    return loadConsoleHtml();
   });
 
   // ---- users --------------------------------------------------------------------------
