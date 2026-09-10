@@ -35,6 +35,7 @@ WORKDIR /app
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build     /app/dist         ./dist
 COPY migrations ./migrations
+COPY public ./public
 COPY package.json ./
 
 # Non-root. `node` (uid 1000) ships with the official image. Application files stay owned by
